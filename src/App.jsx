@@ -327,7 +327,9 @@ const App = () => {
     }
   };
 
-  const handleNewUserRoleSelection = async (selectedRole) => {
+const handleNewUserRoleSelection = async (selectedRole) => {
+    // Show a loading state to the user while the role is being updated
+    setModalContent({ title: "Updating Role", message: "Please wait while we set your role..." });
     if (auth.currentUser && db) {
       try {
         const userRef = doc(db, `/artifacts/${appId}/users`, auth.currentUser.uid);
@@ -339,6 +341,8 @@ const App = () => {
         console.error("Error selecting new user role:", error);
         setModalContent({ title: "Error", message: "Failed to set your role. Please try again." });
       }
+    } else {
+      setModalContent({ title: "Error", message: "Authentication failed. Please try logging in again." });
     }
   };
   
