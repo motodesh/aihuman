@@ -7,6 +7,7 @@
     "build": "react-scripts build"
   },
   "dependencies": {
+    "@firebasegen/default-connector": "file:dataconnect-generated/js/default-connector",
     "firebase": "^11.6.1",
     "lucide-react": "^0.302.0",
     "react": "^18.2.0",
