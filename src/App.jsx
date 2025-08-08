@@ -310,12 +310,12 @@ const App = () => {
       const result = await signInWithPopup(auth, provider);
       const googleUser = result.user;
 
-      if (!googleUser.phoneNumber) {
-        setModalContent({ title: "Phone Number Required", message: 'Your Google account does not have a phone number. Please use the phone number login.' });
-        await auth.signOut();
-        setIsSigningInWithGoogle(false);
-        return;
-      }
+    //   if (!googleUser.phoneNumber) {
+    //     setModalContent({ title: "Phone Number Required", message: 'Your Google account does not have a phone number. Please use the phone number login.' });
+    //     await auth.signOut();
+    //     setIsSigningInWithGoogle(false);
+    //     return;
+    //   }
       
       const userRef = doc(db, `/artifacts/${appId}/users`, googleUser.uid);
       const userSnap = await getDoc(userRef);
