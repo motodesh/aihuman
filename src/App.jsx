@@ -251,7 +251,7 @@ const App = () => {
   };
 
   // --- Login/Logout Functions ---
-  const handleLogin = async (e) => {
+   const handleLogin = async (e) => {
     e.preventDefault();
     const name = e.target.name.value;
     const email = e.target.email.value;
@@ -263,7 +263,7 @@ const App = () => {
         return;
       }
       
-      // Sign in anonymously and then create the user profile
+      // Correctly sign in anonymously using the client SDK
       const userCredential = await signInAnonymously(auth);
       const uid = userCredential.user.uid;
 
