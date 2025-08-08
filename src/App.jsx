@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, where, deleteDoc } from 'firebase/firestore';
 
 // Lucide-react for icons
@@ -74,10 +74,13 @@ const App = () => {
   // Firebase state
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false); // New state to track auth readiness
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   // App ID for Firestore
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+  // Gemini API key from environment variables
+  const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
 
   // --- Firebase Initialization and Auth ---
   useEffect(() => {
@@ -92,6 +95,7 @@ const App = () => {
                 measurementId: "G-95ZBMYKFKC"       
             };
 
+
     const app = initializeApp(firebaseConfig);
     const authInstance = getAuth(app);
     const dbInstance = getFirestore(app);
@@ -99,7 +103,6 @@ const App = () => {
     setDb(dbInstance);
     setAuth(authInstance);
 
-    // This listener is crucial for handling both new sign-ins and existing sessions.
     const unsubscribe = onAuthStateChanged(authInstance, async (authUser) => {
       if (authUser) {
         const userRef = doc(dbInstance, `/artifacts/${appId}/users`, authUser.uid);
@@ -113,7 +116,6 @@ const App = () => {
           setJobTemplates(userData.jobTemplates || []);
           setSelectedCommunityArea(userData.units?.[0] || null);
         } else {
-          // A user is signed in (e.g., via Google), but no role is assigned yet.
           setUser({ isLoggedIn: true, role: null, uid: authUser.uid });
           setIsNewUser(true);
         }
@@ -121,7 +123,7 @@ const App = () => {
         setUser({ isLoggedIn: false, role: null, uid: null });
         setIsNewUser(false);
       }
-      setIsAuthReady(true); // Signal that auth state has been checked
+      setIsAuthReady(true);
     });
 
     return () => unsubscribe();
@@ -353,6 +355,12 @@ const App = () => {
   const handleAITagging = async () => {
     if (!jobDescription.trim()) return;
 
+    // Check if the Gemini API key is available
+    if (!geminiApiKey) {
+      setModalContent({ title: "API Key Missing", message: "The Gemini API key is missing. Please add it as an environment variable in Vercel to use this feature." });
+      return;
+    }
+    
     setIsAITagging(true);
     try {
       const serviceNames = serviceCatalog.map(s => s.name).join(', ');
@@ -376,7 +384,7 @@ const App = () => {
           }
       };
       
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=';
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
       const response = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -433,7 +441,6 @@ const App = () => {
     try {
       const jobRef = doc(db, `/artifacts/${appId}/jobs`, jobId);
       await updateDoc(jobRef, { status: 'accepted', acceptedQuoteId: quoteId });
-      // Mock for quality assurance follow-up
       setTimeout(() => {
         setModalContent({ title: "Proactive Follow-up", message: `A day has passed since Job ${jobId} was marked as accepted. Please leave a review for the service provider.` });
       }, 24 * 60 * 60 * 1000);
@@ -936,7 +943,6 @@ const App = () => {
       content = renderAdminDashboard();
     }
 
-    // NEW: Combined back navigation and main dashboard view for cleaner rendering
     return (
       <div className="w-full max-w-4xl bg-white shadow-xl rounded-2xl p-6 md:p-8">
         <div className="flex justify-between items-center mb-6">
@@ -972,7 +978,6 @@ const App = () => {
     );
   };
   
-  // NEW: Extracted the main content blocks into their own functions for cleaner code
   const renderResidentRequestForm = () => (
     <div className="relative p-6 bg-gray-50 rounded-xl shadow-inner">
       <h2 className="text-2xl font-bold mb-4 text-center">Request a Service: {selectedService.name}</h2>
