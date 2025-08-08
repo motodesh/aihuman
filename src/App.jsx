@@ -280,7 +280,7 @@ const App = () => {
           await setDoc(userRef, {
             role: user.role,
             name: `User-${auth.currentUser.uid.substring(0, 5)}`,
-            phoneNumber: phoneNumber,
+            phoneNumber: phoneNumber || null,
             location: location,
             bio: '',
             portfolio: [],
@@ -324,7 +324,7 @@ const App = () => {
           role: 'unassigned',
           name: googleUser.displayName,
           email: googleUser.email,
-          phoneNumber: googleUser.phoneNumber,
+          phoneNumber: googleUser.phoneNumber || null,
           createdAt: new Date().toISOString(),
           bio: '',
           portfolio: [],
