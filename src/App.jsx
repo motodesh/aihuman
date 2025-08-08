@@ -11,13 +11,22 @@ const App = () => {
   // Main app state for authentication and user role
   const [user, setUser] = useState({ isLoggedIn: false, role: null, uid: null });
   
+  // Login-specific states
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isSigningInWithGoogle, setIsSigningInWithGoogle] = useState(false);
+  // NEW: This line was missing, which caused the error
+  const [isNewUser, setIsNewUser] = useState(false);
+
   // App-wide data and loading states
   const [allUsers, setAllUsers] = useState([]);
   const [pendingProviders, setPendingProviders] = useState([]);
   const [allJobs, setAllJobs] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const [announcements, setAnnouncements] = useState([]); 
   const [serviceCatalog, setServiceCatalog] = useState([]);
   const [communityPosts, setCommunityPosts] = useState([]);
   const [events, setEvents] = useState([]);
