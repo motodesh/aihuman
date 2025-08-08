@@ -1,24 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, where, deleteDoc } from 'firebase/firestore';
 
 // Lucide-react for icons
 import { Wrench, Zap, Home, Droplet, Shirt, UserPlus, X, Briefcase, DollarSign, MessageSquare, CheckCircle2, User, Users, List, Phone, MessageCircleMore, Key, DoorOpen, CornerDownLeft, Plus, MapPin, Bell, Star, Clock, Heart, Edit, FileText, LayoutGrid, Brain, Hash, Award, Group, Mic, CheckCircle, Gift, RefreshCcw, Book, Map, BriefcaseBusiness, Gavel, ScanText, TrendingUp, BarChart4 } from 'lucide-react';
 
-
 // Main application component
 const App = () => {
   // Main app state for authentication and user role
   const [user, setUser] = useState({ isLoggedIn: false, role: null, uid: null });
-  
-  // Login-specific states
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [isSigningInWithGoogle, setIsSigningInWithGoogle] = useState(false);
-  const [isNewUser, setIsNewUser] = useState(false);
   
   // App-wide data and loading states
   const [allUsers, setAllUsers] = useState([]);
@@ -83,26 +74,22 @@ const App = () => {
   // Gemini API key from environment variables
   const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
 
-
   // --- Firebase Initialization and Auth ---
-
   useEffect(() => {
     const firebaseConfig = {
-                apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
-                authDomain: "aihuman-b71a8.firebaseapp.com",
-                databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
-                projectId: "aihuman-b71a8",
-                storageBucket: "aihuman-b71a8.firebasestorage.app",
-                messagingSenderId: "611379386902",
-                appId: "1:611379386902:web:858045aa231ddc67f17337",
-                measurementId: "G-95ZBMYKFKC"
-            };
-
+       apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
+  authDomain: "aihuman-b71a8.firebaseapp.com",
+  databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
+  projectId: "aihuman-b71a8",
+  storageBucket: "aihuman-b71a8.firebasestorage.app",
+  messagingSenderId: "611379386902",
+  appId: "1:611379386902:web:858045aa231ddc67f17337",
+  measurementId: "G-95ZBMYKFKC"
+    };
 
     const app = initializeApp(firebaseConfig);
     const authInstance = getAuth(app);
     const dbInstance = getFirestore(app);
-
 
     setDb(dbInstance);
     setAuth(authInstance);
@@ -253,109 +240,46 @@ const App = () => {
       setModalContent({ title: "Geolocation Not Supported", message: "Geolocation is not supported by your browser." });
     }
   };
-  
+
   // --- Login/Logout Functions ---
-  const handleSendOtp = async (selectedRole) => {
-    if (phoneNumber.length >= 10 && auth) {
-      setModalContent({ title: "OTP Sent", message: `A simulated OTP has been sent to ${phoneNumber}. Please enter '123456' to log in as a ${selectedRole}.` });
-      setOtpSent(true);
-      setUser(prev => ({ ...prev, role: selectedRole }));
-    } else {
-      setModalContent({ title: "Invalid Phone Number", message: 'Please enter a valid phone number.' });
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    setIsVerifyingOtp(true);
-    if (otp === '123456') {
-      try {
-        await signInAnonymously(auth);
-        const userRef = doc(db, `/artifacts/${appId}/users`, auth.currentUser.uid);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            role: user.role,
-            name: `User-${auth.currentUser.uid.substring(0, 5)}`,
-            phoneNumber: phoneNumber,
-            location: location,
-            bio: '',
-            portfolio: [],
-            availability: 'Mon-Fri, 9am-5pm',
-            units: [],
-            serviceAreas: [],
-          });
-        }
-        setOtpSent(false);
-        setOtp('');
-      } catch (error) {
-        console.error("Error signing in or creating user:", error);
-        setModalContent({ title: "Login Error", message: 'An error occurred during login.' });
-      } finally {
-        setIsVerifyingOtp(false);
-      }
-    } else {
-      setModalContent({ title: "Invalid OTP", message: 'Invalid OTP. Please try again.' });
-      setIsVerifyingOtp(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setIsSigningInWithGoogle(true);
-    const provider = new GoogleAuthProvider();
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    const name = e.target.name.value;
+    const email = e.target.email.value;
+    const role = e.target.role.value;
+    
     try {
-      const result = await signInWithPopup(auth, provider);
-      const googleUser = result.user;
-
-      const userRef = doc(db, `/artifacts/${appId}/users`, googleUser.uid);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          role: 'unassigned',
-          name: googleUser.displayName,
-          email: googleUser.email,
-          phoneNumber: googleUser.phoneNumber || null,
-          createdAt: new Date().toISOString(),
-          bio: '',
-          portfolio: [],
-          availability: 'Mon-Fri, 9am-5pm',
-          units: [],
-          serviceAreas: [],
-        });
+      if (!auth) {
+        setModalContent({ title: "Initialization Error", message: "Firebase is not initialized yet. Please wait a moment and try again." });
+        return;
       }
       
+      // Sign in anonymously and then create the user profile
+      const userCredential = await signInAnonymously(auth);
+      const uid = userCredential.user.uid;
+
+      const userRef = doc(db, `/artifacts/${appId}/users`, uid);
+      await setDoc(userRef, {
+        role: role,
+        name: name,
+        email: email,
+        createdAt: new Date().toISOString(),
+        bio: '',
+        portfolio: [],
+        availability: 'Mon-Fri, 9am-5pm',
+        units: [],
+        serviceAreas: [],
+      });
+      setModalContent({ title: "Login Successful", message: `Welcome, ${name}! You are now logged in as a ${role}.` });
     } catch (error) {
-      console.error("Error signing in with Google:", error);
-      setModalContent({ title: "Sign-in Failed", message: 'Failed to sign in with Google.' });
-    } finally {
-      setIsSigningInWithGoogle(false);
+      console.error("Error with simple login:", error);
+      setModalContent({ title: "Login Error", message: `An error occurred: ${error.message}` });
     }
   };
 
-const handleNewUserRoleSelection = async (selectedRole) => {
-    // Show a loading state to the user while the role is being updated
-    setModalContent({ title: "Updating Role", message: "Please wait while we set your role..." });
-    if (auth.currentUser && db) {
-      try {
-        const userRef = doc(db, `/artifacts/${appId}/users`, auth.currentUser.uid);
-        await updateDoc(userRef, { role: selectedRole });
-        setUser(prev => ({ ...prev, role: selectedRole }));
-        setIsNewUser(false);
-        setModalContent({ title: "Role Selected", message: `You are now a ${selectedRole}. Welcome!` });
-      } catch (error) {
-        console.error("Error selecting new user role:", error);
-        setModalContent({ title: "Error", message: "Failed to set your role. Please try again." });
-      }
-    } else {
-      setModalContent({ title: "Error", message: "Authentication failed. Please try logging in again." });
-    }
-  };
-  
   const handleLogout = async () => {
     await auth.signOut();
     setUser({ isLoggedIn: false, role: null, uid: null });
-    setPhoneNumber('');
-    setOtpSent(false);
-    setOtp('');
     setLocation(null);
   };
 
@@ -363,7 +287,6 @@ const handleNewUserRoleSelection = async (selectedRole) => {
   const handleAITagging = async () => {
     if (!jobDescription.trim()) return;
 
-    // Check if the Gemini API key is available
     if (!geminiApiKey) {
       setModalContent({ title: "API Key Missing", message: "The Gemini API key is missing. Please add it as an environment variable in Vercel to use this feature." });
       return;
@@ -433,7 +356,7 @@ const handleNewUserRoleSelection = async (selectedRole) => {
       status: 'pending',
       date: new Date().toISOString(),
       unit: e.target.unit.value,
-      docs: [], // Conceptual
+      docs: [],
     };
     try {
       await addDoc(collection(db, `/artifacts/${appId}/jobs`), jobData);
@@ -939,6 +862,26 @@ const handleNewUserRoleSelection = async (selectedRole) => {
     );
   };
 
+  const LoginScreen = () => (
+    <div className="text-center p-8">
+      <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome to HumanAI Concierge 👋</h1>
+      <p className="text-gray-500 mb-8">Enter your details to get started.</p>
+      <form onSubmit={handleLogin} className="flex flex-col items-center space-y-4">
+        <input type="text" name="name" placeholder="Enter Your Name" required className="p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500" />
+        <input type="email" name="email" placeholder="Enter Your Email" required className="p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500" />
+        <select name="role" required className="p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500">
+          <option value="">Select your role</option>
+          <option value="resident">I am a Resident</option>
+          <option value="serviceProvider">I am a Service Provider</option>
+          <option value="admin">I am an Admin</option>
+        </select>
+        <button type="submit" className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors">
+          Start Using the App
+        </button>
+      </form>
+    </div>
+  );
+
   // --- Universal Dashboard Component ---
   const Dashboard = () => {
     // Renders the main dashboard content based on role
@@ -956,7 +899,7 @@ const handleNewUserRoleSelection = async (selectedRole) => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800 capitalize">{user.role} Dashboard</h1>
           <div className="flex items-center space-x-4">
-            {isViewingChat || isViewingProfile || isRequestingService || isQuoting ? (
+            {(isViewingChat || isViewingProfile || isRequestingService || isQuoting) ? (
               <button onClick={() => { setIsViewingChat(false); setIsViewingProfile(false); setIsRequestingService(false); setIsQuoting(false); }} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
                 <CornerDownLeft size={20} className="mr-2" />
                 Go Back
@@ -1547,64 +1490,7 @@ const handleNewUserRoleSelection = async (selectedRole) => {
     
     // Logic for new and existing users
     if (!user.isLoggedIn) {
-      if (isNewUser && !user.role && !otpSent) {
-        return (
-          <div className="text-center p-8">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Select Your Role</h1>
-            <p className="text-gray-500 mb-8">Please choose your role to continue.</p>
-            <div className="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4">
-              <button onClick={() => handleNewUserRoleSelection('resident')} className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors">I am a Resident</button>
-              <button onClick={() => handleNewUserRoleSelection('serviceProvider')} className="py-3 px-6 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors">I am a Service Provider</button>
-            </div>
-          </div>
-        );
-      } else if (user.role && !otpSent) {
-        return (
-          <div className="text-center p-8">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Log in as {user.role}</h1>
-            <p className="text-gray-500 mb-8">Please enter your phone number to receive an OTP.</p>
-            <div className="flex flex-col items-center space-y-4">
-              <div className="relative"><MessageCircleMore className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="Enter Phone Number" className="pl-10 p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500" /></div>
-              <button onClick={() => handleSendOtp(user.role)} className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors">Send OTP via WhatsApp</button>
-              <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-purple-600">Change Role</button>
-            </div>
-          </div>
-        );
-      } else if (user.role && otpSent) {
-        return (
-          <div className="text-center p-8">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Verify OTP</h1>
-            <p className="text-gray-500 mb-8">An OTP has been sent to {phoneNumber}.</p>
-            <div className="flex flex-col items-center space-y-4">
-              <div className="relative"><Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="Enter OTP" className="pl-10 p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500" /></div>
-              <button onClick={handleVerifyOtp} disabled={isVerifyingOtp} className={`py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md transition-colors ${isVerifyingOtp ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-700'}`}>{isVerifyingOtp ? 'Verifying...' : 'Verify OTP'}</button>
-              <button onClick={() => setOtpSent(false)} className="text-sm text-gray-500 hover:text-purple-600">Resend OTP</button>
-            </div>
-          </div>
-        );
-      } else {
-        return (
-          <div className="text-center p-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome to HumanAI Concierge 👋</h1>
-            <p className="text-gray-500 mb-8">Sign in with your preferred method.</p>
-            <div className="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4">
-              <button onClick={handleGoogleSignIn} disabled={isSigningInWithGoogle} className={`py-3 px-6 text-white font-semibold rounded-lg shadow-md transition-colors flex items-center justify-center ${isSigningInWithGoogle ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48" className="mr-2">
-                  <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.619 6.283-7.237 10.748-13.303 10.748c-8.844 0-16-7.156-16-16s7.156-16 16-16c3.159 0 6.026 1.192 8.243 3.007l5.968-5.968C34.357 5.163 29.803 3 24 3C12.955 3 3 12.955 3 24s9.955 21 21 21c11.045 0 20.021-8.597 20.916-19.141z" />
-                  <path fill="#FF3D00" d="M6.306 14.691L1.4 9.873C4.306 4.673 11.233 1 24 1h0c11.045 0 20.021 8.597 20.916 19.141z" />
-                  <path fill="#4CAF50" d="M24 45c-9.063 0-16.732-5.748-19.511-13.784L1.39 36.311C4.306 41.311 11.233 45 24 45h0c11.045 0 20.021-8.597 20.916-19.141z" />
-                  <path fill="#1976D2" d="M45.021 24c0-1.898-.213-3.71-.595-5.419H42V24H24v8h11.303c-1.619 6.283-7.237 10.748-13.303 10.748c-8.844 0-16-7.156-16-16s7.156-16 16-16c3.159 0 6.026 1.192 8.243 3.007l5.968-5.968C34.357 5.163 29.803 3 24 3c11.045 0 20.021 8.597 20.916 19.141z" />
-                </svg>
-                {isSigningInWithGoogle ? 'Signing In...' : 'Sign in with Google'}
-              </button>
-              <button onClick={() => setIsNewUser(true)} className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors flex items-center justify-center">
-                <Phone size={20} className="mr-2" />
-                Sign in with Phone
-              </button>
-            </div>
-          </div>
-        );
-      }
+      return <LoginScreen />;
     } else {
       return <Dashboard />;
     }
