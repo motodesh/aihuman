@@ -92,7 +92,7 @@ const App = () => {
                 storageBucket: "aihuman-b71a8.firebasestorage.app",
                 messagingSenderId: "611379386902",
                 appId: "1:611379386902:web:858045aa231ddc67f17337",
-                measurementId: "G-95ZBMYKFKC"       
+                measurementId: "G-95ZBMYKFKC"
             };
 
 
