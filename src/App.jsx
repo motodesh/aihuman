@@ -98,20 +98,6 @@ const App = () => {
     setDb(dbInstance);
     setAuth(authInstance);
 
-    const checkAndSignIn = async () => {
-      try {
-        const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        if (token) {
-          await signInWithCustomToken(authInstance, token);
-        } else {
-          await signInAnonymously(authInstance);
-        }
-      } catch (error) {
-        console.error("Firebase auth error:", error);
-      }
-    };
-    checkAndSignIn();
-
     const unsubscribe = onAuthStateChanged(authInstance, async (authUser) => {
       if (authUser) {
         const userRef = doc(dbInstance, `/artifacts/${appId}/users`, authUser.uid);
@@ -1566,9 +1552,44 @@ const App = () => {
     );
   };
 
-  const renderContent = () => {
+   const renderContent = () => {
     if (!user.isLoggedIn) {
-      if (!isNewUser) {
+      if (isNewUser && !user.role && !otpSent) {
+        return (
+          <div className="text-center p-8">
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Select Your Role</h1>
+            <p className="text-gray-500 mb-8">Please choose your role to continue.</p>
+            <div className="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4">
+              <button onClick={() => handleNewUserRoleSelection('resident')} className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors">I am a Resident</button>
+              <button onClick={() => handleNewUserRoleSelection('serviceProvider')} className="py-3 px-6 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors">I am a Service Provider</button>
+            </div>
+          </div>
+        );
+      } else if (user.role && !otpSent) {
+        return (
+          <div className="text-center p-8">
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Log in as {user.role}</h1>
+            <p className="text-gray-500 mb-8">Please enter your phone number to receive an OTP.</p>
+            <div className="flex flex-col items-center space-y-4">
+              <div className="relative"><MessageCircleMore className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="Enter Phone Number" className="pl-10 p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500" /></div>
+              <button onClick={() => handleSendOtp(user.role)} className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors">Send OTP via WhatsApp</button>
+              <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-purple-600">Change Role</button>
+            </div>
+          </div>
+        );
+      } else if (user.role && otpSent) {
+        return (
+          <div className="text-center p-8">
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Verify OTP</h1>
+            <p className="text-gray-500 mb-8">An OTP has been sent to {phoneNumber}.</p>
+            <div className="flex flex-col items-center space-y-4">
+              <div className="relative"><Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="Enter OTP" className="pl-10 p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500" /></div>
+              <button onClick={handleVerifyOtp} disabled={isVerifyingOtp} className={`py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md transition-colors ${isVerifyingOtp ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-700'}`}>{isVerifyingOtp ? 'Verifying...' : 'Verify OTP'}</button>
+              <button onClick={() => setOtpSent(false)} className="text-sm text-gray-500 hover:text-purple-600">Resend OTP</button>
+            </div>
+          </div>
+        );
+      } else {
         return (
           <div className="text-center p-8">
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome to HumanAI Concierge 👋</h1>
@@ -1587,47 +1608,6 @@ const App = () => {
                 <Phone size={20} className="mr-2" />
                 Sign in with Phone
               </button>
-            </div>
-          </div>
-        );
-      }
-      
-      if (isNewUser && !user.role && !otpSent) {
-        return (
-          <div className="text-center p-8">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Select Your Role</h1>
-            <p className="text-gray-500 mb-8">Please choose your role to continue.</p>
-            <div className="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-4">
-              <button onClick={() => handleNewUserRoleSelection('resident')} className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors">I am a Resident</button>
-              <button onClick={() => handleNewUserRoleSelection('serviceProvider')} className="py-3 px-6 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors">I am a Service Provider</button>
-            </div>
-          </div>
-        );
-      }
-
-      if (user.role && !otpSent) {
-        return (
-          <div className="text-center p-8">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Log in as {user.role}</h1>
-            <p className="text-gray-500 mb-8">Please enter your phone number to receive an OTP.</p>
-            <div className="flex flex-col items-center space-y-4">
-              <div className="relative"><MessageCircleMore className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="Enter Phone Number" className="pl-10 p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500" /></div>
-              <button onClick={() => handleSendOtp(user.role)} className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors">Send OTP via WhatsApp</button>
-              <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-purple-600">Change Role</button>
-            </div>
-          </div>
-        );
-      }
-      
-      if (user.role && otpSent) {
-        return (
-          <div className="text-center p-8">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Verify OTP</h1>
-            <p className="text-gray-500 mb-8">An OTP has been sent to {phoneNumber}.</p>
-            <div className="flex flex-col items-center space-y-4">
-              <div className="relative"><Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} /><input type="text" value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="Enter OTP" className="pl-10 p-3 w-64 border rounded-lg focus:ring-2 focus:ring-purple-500" /></div>
-              <button onClick={handleVerifyOtp} disabled={isVerifyingOtp} className={`py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md transition-colors ${isVerifyingOtp ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-700'}`}>{isVerifyingOtp ? 'Verifying...' : 'Verify OTP'}</button>
-              <button onClick={() => setOtpSent(false)} className="text-sm text-gray-500 hover:text-purple-600">Resend OTP</button>
             </div>
           </div>
         );
