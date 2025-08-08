@@ -74,13 +74,14 @@ const App = () => {
   // Firebase state
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
+  const [isAuthReady, setIsAuthReady] = useState(false); // New state to track auth readiness
 
   // App ID for Firestore
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
   // --- Firebase Initialization and Auth ---
   useEffect(() => {
-            const firebaseConfig = {
+    const firebaseConfig = {
                 apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
                 authDomain: "aihuman-b71a8.firebaseapp.com",
                 databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
@@ -98,6 +99,7 @@ const App = () => {
     setDb(dbInstance);
     setAuth(authInstance);
 
+    // This listener is crucial for handling both new sign-ins and existing sessions.
     const unsubscribe = onAuthStateChanged(authInstance, async (authUser) => {
       if (authUser) {
         const userRef = doc(dbInstance, `/artifacts/${appId}/users`, authUser.uid);
@@ -111,6 +113,7 @@ const App = () => {
           setJobTemplates(userData.jobTemplates || []);
           setSelectedCommunityArea(userData.units?.[0] || null);
         } else {
+          // A user is signed in (e.g., via Google), but no role is assigned yet.
           setUser({ isLoggedIn: true, role: null, uid: authUser.uid });
           setIsNewUser(true);
         }
@@ -118,6 +121,7 @@ const App = () => {
         setUser({ isLoggedIn: false, role: null, uid: null });
         setIsNewUser(false);
       }
+      setIsAuthReady(true); // Signal that auth state has been checked
     });
 
     return () => unsubscribe();
@@ -266,7 +270,7 @@ const App = () => {
           await setDoc(userRef, {
             role: user.role,
             name: `User-${auth.currentUser.uid.substring(0, 5)}`,
-            phoneNumber: phoneNumber || null,
+            phoneNumber: phoneNumber,
             location: location,
             bio: '',
             portfolio: [],
@@ -296,13 +300,6 @@ const App = () => {
       const result = await signInWithPopup(auth, provider);
       const googleUser = result.user;
 
-    //   if (!googleUser.phoneNumber) {
-    //     setModalContent({ title: "Phone Number Required", message: 'Your Google account does not have a phone number. Please use the phone number login.' });
-    //     await auth.signOut();
-    //     setIsSigningInWithGoogle(false);
-    //     return;
-    //   }
-      
       const userRef = doc(db, `/artifacts/${appId}/users`, googleUser.uid);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
@@ -328,7 +325,6 @@ const App = () => {
     }
   };
 
-   // FIXED: Added a check for db and auth and a success message.
   const handleNewUserRoleSelection = async (selectedRole) => {
     if (auth.currentUser && db) {
       try {
@@ -930,31 +926,6 @@ const App = () => {
 
   // --- Universal Dashboard Component ---
   const Dashboard = () => {
-    // NEW: Back button logic to return to main dashboard view
-    if (isViewingChat || isViewingProfile || isRequestingService || isQuoting) {
-      return (
-        <div className="w-full max-w-4xl bg-white shadow-xl rounded-2xl p-6 md:p-8">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-800 capitalize">{user.role} Dashboard</h1>
-            <div className="flex items-center space-x-4">
-              <button onClick={() => { setIsViewingChat(false); setIsViewingProfile(false); setIsRequestingService(false); setIsQuoting(false); }} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
-                <CornerDownLeft size={20} className="mr-2" />
-                Go Back
-              </button>
-              <button onClick={handleLogout} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
-                <DoorOpen size={20} className="mr-2" />
-                Logout
-              </button>
-            </div>
-          </div>
-          {isViewingChat && <ChatWindow />}
-          {isViewingProfile && <ProfileView profileUser={viewedProfile} onBack={() => setIsViewingProfile(false)} />}
-          {isRequestingService && renderResidentRequestForm()}
-          {isQuoting && renderSPQuoteForm()}
-        </div>
-      );
-    }
-    
     // Renders the main dashboard content based on role
     let content;
     if (user.role === 'resident') {
@@ -965,18 +936,26 @@ const App = () => {
       content = renderAdminDashboard();
     }
 
+    // NEW: Combined back navigation and main dashboard view for cleaner rendering
     return (
       <div className="w-full max-w-4xl bg-white shadow-xl rounded-2xl p-6 md:p-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800 capitalize">{user.role} Dashboard</h1>
           <div className="flex items-center space-x-4">
-            {user.isLoggedIn && (
-              <div className="relative">
-                <MessageSquare size={28} className="text-gray-600" />
-                {unreadMessages > 0 && (
-                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">{unreadMessages}</span>
-                )}
-              </div>
+            {isViewingChat || isViewingProfile || isRequestingService || isQuoting ? (
+              <button onClick={() => { setIsViewingChat(false); setIsViewingProfile(false); setIsRequestingService(false); setIsQuoting(false); }} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
+                <CornerDownLeft size={20} className="mr-2" />
+                Go Back
+              </button>
+            ) : (
+              user.isLoggedIn && (
+                <div className="relative">
+                  <MessageSquare size={28} className="text-gray-600" />
+                  {unreadMessages > 0 && (
+                    <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">{unreadMessages}</span>
+                  )}
+                </div>
+              )
             )}
             <button onClick={handleLogout} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
               <DoorOpen size={20} className="mr-2" />
@@ -984,310 +963,334 @@ const App = () => {
             </button>
           </div>
         </div>
-        {content}
+        {isViewingChat && <ChatWindow />}
+        {isViewingProfile && <ProfileView profileUser={viewedProfile} onBack={() => setIsViewingProfile(false)} />}
+        {isRequestingService && renderResidentRequestForm()}
+        {isQuoting && renderSPQuoteForm()}
+        {(!isViewingChat && !isViewingProfile && !isRequestingService && !isQuoting) && content}
       </div>
     );
   };
+  
+  // NEW: Extracted the main content blocks into their own functions for cleaner code
+  const renderResidentRequestForm = () => (
+    <div className="relative p-6 bg-gray-50 rounded-xl shadow-inner">
+      <h2 className="text-2xl font-bold mb-4 text-center">Request a Service: {selectedService.name}</h2>
+      <div className="mb-6 p-4 border rounded-lg bg-white shadow-sm">
+        <p className="text-gray-600 mt-1">{selectedService.description}</p>
+      </div>
+      <form onSubmit={handleSubmitRequest} className="space-y-4">
+        <div><label htmlFor="jobDescription" className="block text-sm font-medium text-gray-700">Job Description</label><textarea id="jobDescription" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} rows="3" required className="w-full p-2 mt-1 border rounded-lg"></textarea></div>
+        <button type="button" onClick={handleAITagging} disabled={isAITagging} className={`w-full py-2 text-white font-semibold rounded-lg shadow-md transition-colors flex items-center justify-center ${isAITagging ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
+          <Brain size={20} className="mr-2" /> {isAITagging ? 'Generating tags...' : 'Generate AI Tags'}
+        </button>
+        {aiTags.length > 0 && (
+          <div className="mt-2"><p className="text-sm font-medium text-gray-700">Suggested Tags:</p><div className="flex flex-wrap gap-2 mt-1">{aiTags.map((tag, i) => (<span key={i} className="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-semibold rounded-full">{tag}</span>))}</div></div>
+        )}
+        <div><label htmlFor="unit" className="block text-sm font-medium text-gray-700">Your Unit</label><input type="text" id="unit" required className="w-full p-2 mt-1 border rounded-lg" placeholder="e.g., A-101" /></div>
+        <button type="submit" className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center">
+          <Plus size={20} className="mr-2"/> Submit Request
+        </button>
+      </form>
+    </div>
+  );
 
-    // --- Memoized Lists for Performance ---
-    const memoizedServiceCatalog = useMemo(() => {
-      return serviceCatalog.filter(service =>
-        service.name.toLowerCase().includes(residentSearchQuery.toLowerCase())
-      );
-    }, [serviceCatalog, residentSearchQuery]);
+  const renderSPQuoteForm = () => (
+    <div className="relative p-6 bg-gray-50 rounded-xl shadow-inner">
+      <h2 className="text-2xl font-bold mb-4 text-center">Submit a Quote</h2>
+      <div className="mb-6 p-4 border rounded-lg bg-white shadow-sm">
+        <h3 className="text-lg font-semibold">{selectedJob.service}</h3>
+        <p className="text-gray-600 mt-1">{selectedJob.description}</p>
+        <p className="text-sm text-gray-500 mt-2">Requested by {selectedJob.residentName}</p>
+      </div>
+      <form onSubmit={handleQuoteSubmission} className="space-y-4">
+        <div><label htmlFor="quote" className="block text-sm font-medium text-gray-700">Your Quote (in $)</label><input type="number" id="quote" required className="w-full p-2 mt-1 border rounded-lg" placeholder="e.g., 50" /></div>
+        <div><label htmlFor="message" className="block text-sm font-medium text-gray-700">Message to Resident</label><textarea id="message" rows="3" className="w-full p-2 mt-1 border rounded-lg" placeholder="e.g., 'Hi, I'm available to do this job tomorrow morning. Let me know if that works for you.'"></textarea></div>
+        <button type="submit" className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Submit Quote</button>
+      </form>
+    </div>
+  );
 
-    const memoizedAvailableJobs = useMemo(() => {
-      const userAreas = allUsers.find(u => u.id === user.uid)?.serviceAreas || [];
-      return allJobs.filter(job =>
-        job.status === 'pending' &&
-        userAreas.some(area => job.unit.includes(area)) &&
-        (job.service.toLowerCase().includes(spSearchQuery.toLowerCase()) ||
-         job.description.toLowerCase().includes(spSearchQuery.toLowerCase()))
-      );
-    }, [allJobs, spSearchQuery, allUsers, user.uid]);
+  const renderResidentDashboard = () => {
+    const myJobs = allJobs.filter(job => job.residentUid === user.uid);
+    const residentUser = allUsers.find(u => u.id === user.uid);
+    const myUnits = residentUser?.units || [];
 
-    const renderResidentDashboard = () => {
-      const myJobs = allJobs.filter(job => job.residentUid === user.uid);
-      const residentUser = allUsers.find(u => u.id === user.uid);
-      const myUnits = residentUser?.units || [];
-
-      const renderJobItem = (job) => {
-        const jobQuotes = quotes.filter(q => q.jobId === job.id);
-        const acceptedQuote = quotes.find(q => q.id === job.acceptedQuoteId);
-        const jobReviewed = reviews.some(r => r.jobId === job.id);
-        
-        const isQuoted = job.status === 'quoted';
-        const isAccepted = job.status === 'accepted';
-        
-        return (
-          <div key={job.id} className="p-4 border rounded-lg shadow-sm bg-white">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="text-lg font-medium">{job.service}</h3>
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${
-                job.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                job.status === 'quoted' ? 'bg-blue-100 text-blue-800' :
-                job.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>{job.status}</span>
-            </div>
-            <p className="text-sm text-gray-600">{job.description}</p>
-            <p className="text-xs text-gray-500 mt-2">For unit: {job.unit} | Posted on {new Date(job.date).toLocaleDateString()}</p>
-            
-            {isQuoted && (
-              <div className="mt-4">
-                <h4 className="font-semibold text-gray-700">Quotes ({jobQuotes.length})</h4>
-                <div className="space-y-2 mt-2">
-                  {jobQuotes.map(quote => (
-                    <div key={quote.id} className="flex justify-between items-center p-3 bg-gray-100 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium">{getPartnerName(quote.providerUid)} - <span className="text-green-600 font-bold">${quote.quoteAmount}</span></p>
-                        <p className="text-xs text-gray-500 mt-1">{quote.message}</p>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button onClick={() => handleAcceptQuote(job.id, quote.id)} className="p-2 text-white bg-green-500 rounded-lg hover:bg-green-600">Accept</button>
-                        <button onClick={() => handleRejectQuote(job.id, quote.id)} className="p-2 text-white bg-red-500 rounded-lg hover:bg-red-600">Reject</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {isAccepted && (
-              <div className="mt-4">
-                <h4 className="font-semibold text-gray-700">Accepted Quote</h4>
-                <div className="p-3 bg-green-100 rounded-lg flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{getPartnerName(acceptedQuote?.providerUid)} - <span className="text-green-600 font-bold">${acceptedQuote?.quoteAmount}</span></p>
-                    <p className="text-xs text-gray-500 mt-1">{acceptedQuote?.message}</p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button onClick={() => handleOpenChat(job.id)} className="py-2 px-4 text-white bg-purple-600 rounded-lg hover:bg-purple-700">Chat</button>
-                    {!jobReviewed && (
-                      <button onClick={() => setViewedProfile(acceptedQuote?.providerUid)} className="py-2 px-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700">Review</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )
-      };
-
+    const renderJobItem = (job) => {
+      const jobQuotes = quotes.filter(q => q.jobId === job.id);
+      const acceptedQuote = quotes.find(q => q.id === job.acceptedQuoteId);
+      const jobReviewed = reviews.some(r => r.jobId === job.id);
+      
+      const isQuoted = job.status === 'quoted';
+      const isAccepted = job.status === 'accepted';
+      
       return (
-        <>
-          <div className="flex justify-between items-center mb-4 border-b pb-2">
-            <h1 className="text-3xl font-bold text-gray-800">Resident Dashboard</h1>
-            <div className="flex space-x-2">
-              <button onClick={() => setActiveResidentTab('home')} className={`py-2 px-4 font-medium rounded-lg ${activeResidentTab === 'home' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>Home</button>
-              <button onClick={() => setActiveResidentTab('my-jobs')} className={`py-2 px-4 font-medium rounded-lg ${activeResidentTab === 'my-jobs' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>My Jobs</button>
-              <button onClick={() => { setIsViewingProfile(true); setViewedProfile(allUsers.find(u => u.id === user.uid)); }} className={`py-2 px-4 font-medium rounded-lg ${activeResidentTab === 'my-profile' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>My Profile</button>
-            </div>
+        <div key={job.id} className="p-4 border rounded-lg shadow-sm bg-white">
+          <div className="flex justify-between items-center mb-1">
+            <h3 className="text-lg font-medium">{job.service}</h3>
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${
+              job.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+              job.status === 'quoted' ? 'bg-blue-100 text-blue-800' :
+              job.status === 'accepted' ? 'bg-green-100 text-green-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>{job.status}</span>
           </div>
-          {activeResidentTab === 'home' ? (
-            <>
-              <div className="mb-8">
-                <input
-                  type="text"
-                  placeholder="Search for services..."
-                  value={residentSearchQuery}
-                  onChange={(e) => setResidentSearchQuery(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {memoizedServiceCatalog.map((service) => (
-                  <button
-                    key={service.id}
-                    onClick={() => handleOpenRequest(service)}
-                    className="bg-gray-50 hover:bg-purple-50 transition-colors duration-200 p-6 rounded-xl border border-gray-200 shadow-md flex flex-col items-center text-center group"
-                  >
-                    <div className="p-4 bg-purple-100 group-hover:bg-purple-200 rounded-full mb-4 transition-colors duration-200">
-                      <FileText className="h-8 w-8 text-purple-600" />
+          <p className="text-sm text-gray-600">{job.description}</p>
+          <p className="text-xs text-gray-500 mt-2">For unit: {job.unit} | Posted on {new Date(job.date).toLocaleDateString()}</p>
+          
+          {isQuoted && (
+            <div className="mt-4">
+              <h4 className="font-semibold text-gray-700">Quotes ({jobQuotes.length})</h4>
+              <div className="space-y-2 mt-2">
+                {jobQuotes.map(quote => (
+                  <div key={quote.id} className="flex justify-between items-center p-3 bg-gray-100 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium">{getPartnerName(quote.providerUid)} - <span className="text-green-600 font-bold">${quote.quoteAmount}</span></p>
+                      <p className="text-xs text-gray-500 mt-1">{quote.message}</p>
                     </div>
-                    <h2 className="text-xl font-semibold text-gray-800 mb-1">{service.name}</h2>
-                    <p className="text-sm text-gray-500">{service.description}</p>
-                  </button>
+                    <div className="flex space-x-2">
+                      <button onClick={() => handleAcceptQuote(job.id, quote.id)} className="p-2 text-white bg-green-500 rounded-lg hover:bg-green-600">Accept</button>
+                      <button onClick={() => handleRejectQuote(job.id, quote.id)} className="p-2 text-white bg-red-500 rounded-lg hover:bg-red-600">Reject</button>
+                    </div>
+                  </div>
                 ))}
               </div>
-            </>
-          ) : (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold mb-4">My Service Requests</h2>
-              {myJobs.length === 0 ? (
-                <p className="text-center text-gray-500">You have no active job requests.</p>
-              ) : (
-                myJobs.map(job => renderJobItem(job))
-              )}
             </div>
           )}
-        </>
-      );
+          
+          {isAccepted && (
+            <div className="mt-4">
+              <h4 className="font-semibold text-gray-700">Accepted Quote</h4>
+              <div className="p-3 bg-green-100 rounded-lg flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{getPartnerName(acceptedQuote?.providerUid)} - <span className="text-green-600 font-bold">${acceptedQuote?.quoteAmount}</span></p>
+                  <p className="text-xs text-gray-500 mt-1">{acceptedQuote?.message}</p>
+                </div>
+                <div className="flex space-x-2">
+                  <button onClick={() => handleOpenChat(job.id)} className="py-2 px-4 text-white bg-purple-600 rounded-lg hover:bg-purple-700">Chat</button>
+                  {!jobReviewed && (
+                    <button onClick={() => setViewedProfile(acceptedQuote?.providerUid)} className="py-2 px-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700">Review</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )
     };
 
-    const renderServiceProviderDashboard = () => {
-      const myQuotes = quotes.filter(q => q.providerUid === user.uid);
-      const myAcceptedJobs = allJobs.filter(job => job.acceptedQuoteId && quotes.find(q => q.id === job.acceptedQuoteId)?.providerUid === user.uid);
-
-      const totalEarnings = myAcceptedJobs.reduce((sum, job) => {
-        const quote = quotes.find(q => q.id === job.acceptedQuoteId);
-        return sum + (quote ? parseFloat(quote.quoteAmount) : 0);
-      }, 0);
-      
-      const renderJobItem = (job) => {
-        const myQuote = myQuotes.find(q => q.jobId === job.id);
-        const isMyQuoteAccepted = job.acceptedQuoteId === myQuote?.id;
-        
-        return (
-          <div key={job.id} className="p-4 border rounded-lg shadow-sm bg-white">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="text-lg font-medium">{job.service} - <span className="font-normal text-gray-600">Request from {job.residentName}</span></h3>
-              <p className="text-sm text-gray-600">{job.description}</p>
-              <p className="text-sm text-gray-500 mt-1">For unit: {job.unit}</p>
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${
-                job.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                job.status === 'quoted' ? 'bg-blue-100 text-blue-800' :
-                'bg-green-100 text-green-800'
-              }`}>{job.status}</span>
-            </div>
-            {isMyQuoteAccepted && (
-              <div className="mt-4 flex justify-between items-center bg-green-100 p-3 rounded-lg">
-                <p className="text-sm text-green-800 font-semibold">Accepted! Your quote was ${myQuote.quoteAmount}.</p>
-                <button onClick={() => handleOpenChat(job.id)} className="py-1 px-3 text-white bg-purple-600 rounded-lg hover:bg-purple-700 text-sm">Chat</button>
-              </div>
-            )}
-            {!isMyQuoteAccepted && myQuote && (
-              <p className="text-sm text-gray-500 mt-2">You quoted ${myQuote.quoteAmount}. Status: {myQuote.status}</p>
-            )}
+    return (
+      <>
+        <div className="flex justify-between items-center mb-4 border-b pb-2">
+          <h1 className="text-3xl font-bold text-gray-800">Resident Dashboard</h1>
+          <div className="flex space-x-2">
+            <button onClick={() => setActiveResidentTab('home')} className={`py-2 px-4 font-medium rounded-lg ${activeResidentTab === 'home' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>Home</button>
+            <button onClick={() => setActiveResidentTab('my-jobs')} className={`py-2 px-4 font-medium rounded-lg ${activeResidentTab === 'my-jobs' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>My Jobs</button>
+            <button onClick={() => { setIsViewingProfile(true); setViewedProfile(allUsers.find(u => u.id === user.uid)); }} className={`py-2 px-4 font-medium rounded-lg ${activeResidentTab === 'my-profile' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>My Profile</button>
           </div>
-        )
-      };
-
-      return (
-        <>
-          <div className="flex justify-between items-center mb-4 border-b pb-2">
-            <h1 className="text-3xl font-bold text-gray-800">Service Provider Dashboard</h1>
-            <div className="flex space-x-2">
-              <button onClick={() => setActiveSPTab('available-jobs')} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'available-jobs' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>Available Jobs</button>
-              <button onClick={() => setActiveSPTab('my-jobs')} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'my-jobs' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>My Jobs</button>
-              <button onClick={() => setActiveSPTab('community')} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'community' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>Community</button>
-              <button onClick={() => setActiveSPTab('training')} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'training' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>Training</button>
-              <button onClick={() => { setIsViewingProfile(true); setViewedProfile(allUsers.find(u => u.id === user.uid)); }} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'my-profile' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>My Profile</button>
+        </div>
+        {activeResidentTab === 'home' ? (
+          <>
+            <div className="mb-8">
+              <input
+                type="text"
+                placeholder="Search for services..."
+                value={residentSearchQuery}
+                onChange={(e) => setResidentSearchQuery(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
+              />
             </div>
-          </div>
-
-          {activeSPTab === 'available-jobs' ? (
-            isServiceProviderOnboarding ? (
-              <div className="p-6 bg-gray-50 rounded-xl shadow-inner">
-                <h2 className="text-2xl font-semibold mb-4 text-center">Register as a Service Provider</h2>
-                <form onSubmit={handleOnboardSubmit} className="space-y-4">
-                  <div><label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label><input type="text" id="name" required className="w-full p-2 mt-1 border rounded-lg" /></div>
-                  <div><label htmlFor="service" className="block text-sm font-medium text-gray-700">Service Offered</label><select id="service" required className="w-full p-2 mt-1 border rounded-lg">{serviceCatalog.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
-                  <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700">Phone Number</label><input type="tel" id="phone" required className="w-full p-2 mt-1 border rounded-lg" /></div>
-                  <button type="submit" className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Register</button>
-                </form>
-                <p className="text-sm text-gray-500 mt-4 text-center">Or <button onClick={() => setIsServiceProviderOnboarding(false)} className="text-purple-600 hover:underline">go back to jobs</button></p>
-              </div>
-            ) : (
-              !isQuoting ? (
-                <div className="space-y-4">
-                  <div className="mb-4">
-                    <input
-                      type="text"
-                      placeholder="Search available jobs..."
-                      value={spSearchQuery}
-                      onChange={(e) => setSpSearchQuery(e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
-                    />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {memoizedServiceCatalog.map((service) => (
+                <button
+                  key={service.id}
+                  onClick={() => handleOpenRequest(service)}
+                  className="bg-gray-50 hover:bg-purple-50 transition-colors duration-200 p-6 rounded-xl border border-gray-200 shadow-md flex flex-col items-center text-center group"
+                >
+                  <div className="p-4 bg-purple-100 group-hover:bg-purple-200 rounded-full mb-4 transition-colors duration-200">
+                    <FileText className="h-8 w-8 text-purple-600" />
                   </div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold text-gray-700">Available Jobs</h2>
-                    <button onClick={() => setIsServiceProviderOnboarding(true)} className="py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600">Register as SP</button>
-                  </div>
-                  {memoizedAvailableJobs.map((job) => (
-                    <div key={job.id} className="p-4 border rounded-lg shadow-sm bg-gray-50 flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-medium">{job.service} - <span className="font-normal text-gray-600">Request from {job.residentName}</span></h3>
-                        <p className="text-sm text-gray-500 mt-1">{job.description}</p>
-                      </div>
-                      <button onClick={() => handleViewQuote(job)} className="py-2 px-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-                        View & Quote
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="relative p-6 bg-gray-50 rounded-xl shadow-inner">
-                  <button onClick={handleBackToJobs} className="absolute top-0 right-0 p-2 text-gray-400 hover:text-gray-600 transition-colors" aria-label="Close"><X size={24} /></button>
-                  <h2 className="text-2xl font-bold mb-4 text-center">Submit a Quote</h2>
-                  <div className="mb-6 p-4 border rounded-lg bg-white shadow-sm">
-                    <h3 className="text-lg font-semibold">{selectedJob.service}</h3>
-                    <p className="text-gray-600 mt-1">{selectedJob.description}</p>
-                    <p className="text-sm text-gray-500 mt-2">Requested by {selectedJob.residentName}</p>
-                  </div>
-                  <form onSubmit={handleQuoteSubmission} className="space-y-4">
-                    <div><label htmlFor="quote" className="block text-sm font-medium text-gray-700">Your Quote (in $)</label><input type="number" id="quote" required className="w-full p-2 mt-1 border rounded-lg" placeholder="e.g., 50" /></div>
-                    <div><label htmlFor="message" className="block text-sm font-medium text-gray-700">Message to Resident</label><textarea id="message" rows="3" className="w-full p-2 mt-1 border rounded-lg" placeholder="e.g., 'Hi, I'm available to do this job tomorrow morning. Let me know if that works for you.'"></textarea></div>
-                    <button type="submit" className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Submit Quote</button>
-                  </form>
-                </div>
-              )
-            )
-          ) : activeSPTab === 'community' ? (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold mb-4">Community Forum</h2>
-              <div className="p-4 bg-gray-100 rounded-lg shadow-inner">
-                <h3 className="font-semibold text-lg mb-2">Post to the Community</h3>
-                <form onSubmit={handlePostCommunityPost} className="space-y-2">
-                  <input type="text" name="title" placeholder="Post Title" required className="w-full p-2 rounded-lg border" />
-                  <textarea name="content" rows="3" placeholder="Share tips, ask for advice..." required className="w-full p-2 rounded-lg border"></textarea>
-                  <button type="submit" className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Post</button>
-                </form>
-              </div>
-              <h3 className="text-xl font-semibold mt-6">Recent Posts</h3>
-              {communityPosts.map(post => (
-                <div key={post.id} className="p-4 bg-white rounded-lg shadow-sm">
-                  <h4 className="font-semibold">{post.title}</h4>
-                  <p className="text-sm text-gray-600 mt-1">{post.content}</p>
-                  <p className="text-xs text-gray-500 mt-2">By {post.authorName} on {new Date(post.timestamp).toLocaleDateString()}</p>
-                </div>
+                  <h2 className="text-xl font-semibold text-gray-800 mb-1">{service.name}</h2>
+                  <p className="text-sm text-gray-500">{service.description}</p>
+                </button>
               ))}
             </div>
-          ) : activeSPTab === 'training' ? (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold mb-4">Skill Development & Training</h2>
-              <div className="p-4 bg-white rounded-lg shadow-sm">
-                <h3 className="font-semibold text-lg">Course: Advanced Plumbing Techniques</h3>
-                <p className="text-sm text-gray-600">A comprehensive course on leak detection, pipe soldering, and advanced fixture installation. Includes video modules and quizzes.</p>
-                <button className="mt-2 py-1 px-3 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Enroll Now</button>
-              </div>
-              <div className="p-4 bg-white rounded-lg shadow-sm">
-                <h3 className="font-semibold text-lg">Webinar: Getting More 5-Star Reviews</h3>
-                <p className="text-sm text-gray-600">Learn best practices for customer communication and satisfaction to boost your ratings and grow your business.</p>
-                <button className="mt-2 py-1 px-3 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Watch Now</button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold mb-4">My Jobs & Earnings</h2>
-              <div className="p-4 bg-gray-200 rounded-lg shadow-inner flex justify-between items-center">
-                <span className="text-lg font-semibold text-gray-700">Total Earnings:</span>
-                <span className="text-2xl font-bold text-green-600">${totalEarnings.toFixed(2)}</span>
-              </div>
-              <h3 className="text-xl font-semibold mt-6">All My Quotes</h3>
-              <div className="space-y-2">
-                {myQuotes.length === 0 ? (
-                  <p className="text-center text-gray-500">You haven't submitted any quotes yet.</p>
-                ) : (
-                  myQuotes.map(quote => renderJobItem(allJobs.find(job => job.id === quote.jobId)))
-                )}
-              </div>
+          </>
+        ) : (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-semibold mb-4">My Service Requests</h2>
+            {myJobs.length === 0 ? (
+              <p className="text-center text-gray-500">You have no active job requests.</p>
+            ) : (
+              myJobs.map(job => renderJobItem(job))
+            )}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderServiceProviderDashboard = () => {
+    const myQuotes = quotes.filter(q => q.providerUid === user.uid);
+    const myAcceptedJobs = allJobs.filter(job => job.acceptedQuoteId && quotes.find(q => q.id === job.acceptedQuoteId)?.providerUid === user.uid);
+
+    const totalEarnings = myAcceptedJobs.reduce((sum, job) => {
+      const quote = quotes.find(q => q.id === job.acceptedQuoteId);
+      return sum + (quote ? parseFloat(quote.quoteAmount) : 0);
+    }, 0);
+    
+    const renderJobItem = (job) => {
+      const myQuote = myQuotes.find(q => q.jobId === job.id);
+      const isMyQuoteAccepted = job.acceptedQuoteId === myQuote?.id;
+      
+      return (
+        <div key={job.id} className="p-4 border rounded-lg shadow-sm bg-white">
+          <div className="flex justify-between items-center mb-1">
+            <h3 className="text-lg font-medium">{job.service} - <span className="font-normal text-gray-600">Request from {job.residentName}</span></h3>
+            <p className="text-sm text-gray-600">{job.description}</p>
+            <p className="text-sm text-gray-500 mt-1">For unit: {job.unit}</p>
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${
+              job.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+              job.status === 'quoted' ? 'bg-blue-100 text-blue-800' :
+              'bg-green-100 text-green-800'
+            }`}>{job.status}</span>
+          </div>
+          {isMyQuoteAccepted && (
+            <div className="mt-4 flex justify-between items-center bg-green-100 p-3 rounded-lg">
+              <p className="text-sm text-green-800 font-semibold">Accepted! Your quote was ${myQuote.quoteAmount}.</p>
+              <button onClick={() => handleOpenChat(job.id)} className="py-1 px-3 text-white bg-purple-600 rounded-lg hover:bg-purple-700 text-sm">Chat</button>
             </div>
           )}
-        </>
-      );
+          {!isMyQuoteAccepted && myQuote && (
+            <p className="text-sm text-gray-500 mt-2">You quoted ${myQuote.quoteAmount}. Status: {myQuote.status}</p>
+          )}
+        </div>
+      )
     };
 
+    return (
+      <>
+        <div className="flex justify-between items-center mb-4 border-b pb-2">
+          <h1 className="text-3xl font-bold text-gray-800">Service Provider Dashboard</h1>
+          <div className="flex space-x-2">
+            <button onClick={() => setActiveSPTab('available-jobs')} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'available-jobs' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>Available Jobs</button>
+            <button onClick={() => setActiveSPTab('my-jobs')} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'my-jobs' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>My Jobs</button>
+            <button onClick={() => setActiveSPTab('community')} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'community' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>Community</button>
+            <button onClick={() => setActiveSPTab('training')} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'training' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>Training</button>
+            <button onClick={() => { setIsViewingProfile(true); setViewedProfile(allUsers.find(u => u.id === user.uid)); }} className={`py-2 px-4 font-medium rounded-lg ${activeSPTab === 'my-profile' ? 'bg-purple-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>My Profile</button>
+          </div>
+        </div>
+
+        {activeSPTab === 'available-jobs' ? (
+          isServiceProviderOnboarding ? (
+            <div className="p-6 bg-gray-50 rounded-xl shadow-inner">
+              <h2 className="text-2xl font-semibold mb-4 text-center">Register as a Service Provider</h2>
+              <form onSubmit={handleOnboardSubmit} className="space-y-4">
+                <div><label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label><input type="text" id="name" required className="w-full p-2 mt-1 border rounded-lg" /></div>
+                <div><label htmlFor="service" className="block text-sm font-medium text-gray-700">Service Offered</label><select id="service" required className="w-full p-2 mt-1 border rounded-lg">{serviceCatalog.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
+                <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700">Phone Number</label><input type="tel" id="phone" required className="w-full p-2 mt-1 border rounded-lg" /></div>
+                <button type="submit" className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Register</button>
+              </form>
+              <p className="text-sm text-gray-500 mt-4 text-center">Or <button onClick={() => setIsServiceProviderOnboarding(false)} className="text-purple-600 hover:underline">go back to jobs</button></p>
+            </div>
+          ) : (
+            !isQuoting ? (
+              <div className="space-y-4">
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    placeholder="Search available jobs..."
+                    value={spSearchQuery}
+                    onChange={(e) => setSpSearchQuery(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 transition-all"
+                  />
+                </div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold text-gray-700">Available Jobs</h2>
+                  <button onClick={() => setIsServiceProviderOnboarding(true)} className="py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600">Register as SP</button>
+                </div>
+                {memoizedAvailableJobs.map((job) => (
+                  <div key={job.id} className="p-4 border rounded-lg shadow-sm bg-gray-50 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-medium">{job.service} - <span className="font-normal text-gray-600">Request from {job.residentName}</span></h3>
+                      <p className="text-sm text-gray-500 mt-1">{job.description}</p>
+                    </div>
+                    <button onClick={() => handleViewQuote(job)} className="py-2 px-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                      View & Quote
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="relative p-6 bg-gray-50 rounded-xl shadow-inner">
+                <h2 className="text-2xl font-bold mb-4 text-center">Submit a Quote</h2>
+                <div className="mb-6 p-4 border rounded-lg bg-white shadow-sm">
+                  <h3 className="text-lg font-semibold">{selectedJob.service}</h3>
+                  <p className="text-gray-600 mt-1">{selectedJob.description}</p>
+                  <p className="text-sm text-gray-500 mt-2">Requested by {selectedJob.residentName}</p>
+                </div>
+                <form onSubmit={handleQuoteSubmission} className="space-y-4">
+                  <div><label htmlFor="quote" className="block text-sm font-medium text-gray-700">Your Quote (in $)</label><input type="number" id="quote" required className="w-full p-2 mt-1 border rounded-lg" placeholder="e.g., 50" /></div>
+                  <div><label htmlFor="message" className="block text-sm font-medium text-gray-700">Message to Resident</label><textarea id="message" rows="3" className="w-full p-2 mt-1 border rounded-lg" placeholder="e.g., 'Hi, I'm available to do this job tomorrow morning. Let me know if that works for you.'"></textarea></div>
+                  <button type="submit" className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Submit Quote</button>
+                </form>
+              </div>
+            )
+          )
+        ) : activeSPTab === 'community' ? (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-semibold mb-4">Community Forum</h2>
+            <div className="p-4 bg-gray-100 rounded-lg shadow-inner">
+              <h3 className="font-semibold text-lg mb-2">Post to the Community</h3>
+              <form onSubmit={handlePostCommunityPost} className="space-y-2">
+                <input type="text" name="title" placeholder="Post Title" required className="w-full p-2 rounded-lg border" />
+                <textarea name="content" rows="3" placeholder="Share tips, ask for advice..." required className="w-full p-2 rounded-lg border"></textarea>
+                <button type="submit" className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Post</button>
+              </form>
+            </div>
+            <h3 className="text-xl font-semibold mt-6">Recent Posts</h3>
+            {communityPosts.map(post => (
+              <div key={post.id} className="p-4 bg-white rounded-lg shadow-sm">
+                <h4 className="font-semibold">{post.title}</h4>
+                <p className="text-sm text-gray-600 mt-1">{post.content}</p>
+                <p className="text-xs text-gray-500 mt-2">By {post.authorName} on {new Date(post.timestamp).toLocaleDateString()}</p>
+              </div>
+            ))}
+          </div>
+        ) : activeSPTab === 'training' ? (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-semibold mb-4">Skill Development & Training</h2>
+            <div className="p-4 bg-white rounded-lg shadow-sm">
+              <h3 className="font-semibold text-lg">Course: Advanced Plumbing Techniques</h3>
+              <p className="text-sm text-gray-600">A comprehensive course on leak detection, pipe soldering, and advanced fixture installation. Includes video modules and quizzes.</p>
+              <button className="mt-2 py-1 px-3 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Enroll Now</button>
+            </div>
+            <div className="p-4 bg-white rounded-lg shadow-sm">
+              <h3 className="font-semibold text-lg">Webinar: Getting More 5-Star Reviews</h3>
+              <p className="text-sm text-gray-600">Learn best practices for customer communication and satisfaction to boost your ratings and grow your business.</p>
+              <button className="mt-2 py-1 px-3 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Watch Now</button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-semibold mb-4">My Jobs & Earnings</h2>
+            <div className="p-4 bg-gray-200 rounded-lg shadow-inner flex justify-between items-center">
+              <span className="text-lg font-semibold text-gray-700">Total Earnings:</span>
+              <span className="text-2xl font-bold text-green-600">${totalEarnings.toFixed(2)}</span>
+            </div>
+            <h3 className="text-xl font-semibold mt-6">All My Quotes</h3>
+            <div className="space-y-2">
+              {myQuotes.length === 0 ? (
+                <p className="text-center text-gray-500">You haven't submitted any quotes yet.</p>
+              ) : (
+                myQuotes.map(quote => renderJobItem(allJobs.find(job => job.id === quote.jobId)))
+              )}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
     const renderAdminDashboard = () => (
       <>
         <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
@@ -1519,40 +1522,17 @@ const App = () => {
       </>
     );
 
-    let content;
-    if (user.role === 'resident') {
-      content = renderResidentDashboard();
-    } else if (user.role === 'serviceProvider') {
-      content = renderServiceProviderDashboard();
-    } else if (user.role === 'admin') {
-      content = renderAdminDashboard();
-    }
-
-    return (
-      <div className="w-full max-w-4xl bg-white shadow-xl rounded-2xl p-6 md:p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 capitalize">{user.role} Dashboard</h1>
-          <div className="flex items-center space-x-4">
-            {user.isLoggedIn && (
-              <div className="relative">
-                <MessageSquare size={28} className="text-gray-600" />
-                {unreadMessages > 0 && (
-                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">{unreadMessages}</span>
-                )}
-              </div>
-            )}
-            <button onClick={handleLogout} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
-              <DoorOpen size={20} className="mr-2" />
-              Logout
-            </button>
-          </div>
+  const renderContent = () => {
+    // Check if auth state has been determined yet. If not, show a loading screen.
+    if (!isAuthReady) {
+      return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans text-xl text-gray-700">
+          Loading...
         </div>
-        {content}
-      </div>
-    );
-  };
-
-   const renderContent = () => {
+      );
+    }
+    
+    // Logic for new and existing users
     if (!user.isLoggedIn) {
       if (isNewUser && !user.role && !otpSent) {
         return (
@@ -1617,6 +1597,12 @@ const App = () => {
     }
   };
 
-
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4 font-sans">
+      {renderContent()}
+      <Modal title={modalContent?.title} message={modalContent?.message} onClose={closeModal} />
+    </div>
+  );
+};
 
 export default App;
