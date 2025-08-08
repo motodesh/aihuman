@@ -6,6 +6,7 @@ import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, colle
 // Lucide-react for icons
 import { Wrench, Zap, Home, Droplet, Shirt, UserPlus, X, Briefcase, DollarSign, MessageSquare, CheckCircle2, User, Users, List, Phone, MessageCircleMore, Key, DoorOpen, CornerDownLeft, Plus, MapPin, Bell, Star, Clock, Heart, Edit, FileText, LayoutGrid, Brain, Hash, Award, Group, Mic, CheckCircle, Gift, RefreshCcw, Book, Map, BriefcaseBusiness, Gavel, ScanText, TrendingUp, BarChart4 } from 'lucide-react';
 
+
 // Main application component
 const App = () => {
   // Main app state for authentication and user role
@@ -82,10 +83,12 @@ const App = () => {
   // Gemini API key from environment variables
   const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
 
+
   // --- Firebase Initialization and Auth ---
+
   useEffect(() => {
     const firebaseConfig = {
-                apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
+                 apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
                 authDomain: "aihuman-b71a8.firebaseapp.com",
                 databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
                 projectId: "aihuman-b71a8",
@@ -99,6 +102,7 @@ const App = () => {
     const app = initializeApp(firebaseConfig);
     const authInstance = getAuth(app);
     const dbInstance = getFirestore(app);
+
 
     setDb(dbInstance);
     setAuth(authInstance);
