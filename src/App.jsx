@@ -342,12 +342,19 @@ const App = () => {
     }
   };
 
+   // FIXED: Added a check for db and auth and a success message.
   const handleNewUserRoleSelection = async (selectedRole) => {
     if (auth.currentUser && db) {
-      const userRef = doc(db, `/artifacts/${appId}/users`, auth.currentUser.uid);
-      await updateDoc(userRef, { role: selectedRole });
-      setUser(prev => ({ ...prev, role: selectedRole }));
-      setIsNewUser(false);
+      try {
+        const userRef = doc(db, `/artifacts/${appId}/users`, auth.currentUser.uid);
+        await updateDoc(userRef, { role: selectedRole });
+        setUser(prev => ({ ...prev, role: selectedRole }));
+        setIsNewUser(false);
+        setModalContent({ title: "Role Selected", message: `You are now a ${selectedRole}. Welcome!` });
+      } catch (error) {
+        console.error("Error selecting new user role:", error);
+        setModalContent({ title: "Error", message: "Failed to set your role. Please try again." });
+      }
     }
   };
   
@@ -937,13 +944,64 @@ const App = () => {
 
   // --- Universal Dashboard Component ---
   const Dashboard = () => {
-    if (isViewingChat) {
-      return <ChatWindow />;
+    // NEW: Back button logic to return to main dashboard view
+    if (isViewingChat || isViewingProfile || isRequestingService || isQuoting) {
+      return (
+        <div className="w-full max-w-4xl bg-white shadow-xl rounded-2xl p-6 md:p-8">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-gray-800 capitalize">{user.role} Dashboard</h1>
+            <div className="flex items-center space-x-4">
+              <button onClick={() => { setIsViewingChat(false); setIsViewingProfile(false); setIsRequestingService(false); setIsQuoting(false); }} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
+                <CornerDownLeft size={20} className="mr-2" />
+                Go Back
+              </button>
+              <button onClick={handleLogout} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
+                <DoorOpen size={20} className="mr-2" />
+                Logout
+              </button>
+            </div>
+          </div>
+          {isViewingChat && <ChatWindow />}
+          {isViewingProfile && <ProfileView profileUser={viewedProfile} onBack={() => setIsViewingProfile(false)} />}
+          {isRequestingService && renderResidentRequestForm()}
+          {isQuoting && renderSPQuoteForm()}
+        </div>
+      );
     }
     
-    if (isViewingProfile) {
-      return <ProfileView profileUser={viewedProfile} onBack={() => setIsViewingProfile(false)} />;
+    // Renders the main dashboard content based on role
+    let content;
+    if (user.role === 'resident') {
+      content = renderResidentDashboard();
+    } else if (user.role === 'serviceProvider') {
+      content = renderServiceProviderDashboard();
+    } else if (user.role === 'admin') {
+      content = renderAdminDashboard();
     }
+
+    return (
+      <div className="w-full max-w-4xl bg-white shadow-xl rounded-2xl p-6 md:p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-800 capitalize">{user.role} Dashboard</h1>
+          <div className="flex items-center space-x-4">
+            {user.isLoggedIn && (
+              <div className="relative">
+                <MessageSquare size={28} className="text-gray-600" />
+                {unreadMessages > 0 && (
+                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">{unreadMessages}</span>
+                )}
+              </div>
+            )}
+            <button onClick={handleLogout} className="text-purple-600 hover:text-purple-800 transition-colors flex items-center">
+              <DoorOpen size={20} className="mr-2" />
+              Logout
+            </button>
+          </div>
+        </div>
+        {content}
+      </div>
+    );
+  };
 
     // --- Memoized Lists for Performance ---
     const memoizedServiceCatalog = useMemo(() => {
