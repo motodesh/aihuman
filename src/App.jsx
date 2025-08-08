@@ -88,7 +88,7 @@ const App = () => {
 
   useEffect(() => {
     const firebaseConfig = {
-                 apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
+                apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
                 authDomain: "aihuman-b71a8.firebaseapp.com",
                 databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
                 projectId: "aihuman-b71a8",
