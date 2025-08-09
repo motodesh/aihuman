@@ -940,7 +940,17 @@ const App = () => {
         <p className="text-gray-600 mt-1">{selectedService.description}</p>
       </div>
       <form onSubmit={handleSubmitRequest} className="space-y-4">
-        <div><label htmlFor="jobDescription" className="block text-sm font-medium text-gray-700">Job Description</label><textarea id="jobDescription" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} rows="3" required className="w-full p-2 mt-1 border rounded-lg"></textarea></div>
+        <div>
+          <label htmlFor="jobDescription" className="block text-sm font-medium text-gray-700">Job Description</label>
+          <textarea
+            id="jobDescription"
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            rows="3"
+            required
+            className="w-full p-2 mt-1 border rounded-lg"
+          ></textarea>
+        </div>
         <button type="button" onClick={handleAITagging} disabled={isAITagging} className={`w-full py-2 text-white font-semibold rounded-lg shadow-md transition-colors flex items-center justify-center ${isAITagging ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
           <Brain size={20} className="mr-2" /> {isAITagging ? 'Generating tags...' : 'Generate AI Tags'}
         </button>
