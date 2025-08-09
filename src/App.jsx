@@ -11,22 +11,13 @@ const App = () => {
   // Main app state for authentication and user role
   const [user, setUser] = useState({ isLoggedIn: false, role: null, uid: null });
   
-  // Login-specific states
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [isSigningInWithGoogle, setIsSigningInWithGoogle] = useState(false);
-  // NEW: This line was missing, which caused the error
-  const [isNewUser, setIsNewUser] = useState(false);
-
   // App-wide data and loading states
   const [allUsers, setAllUsers] = useState([]);
   const [pendingProviders, setPendingProviders] = useState([]);
   const [allJobs, setAllJobs] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [announcements, setAnnouncements] = useState([]); 
+  const [announcements, setAnnouncements] = useState([]);
   const [serviceCatalog, setServiceCatalog] = useState([]);
   const [communityPosts, setCommunityPosts] = useState([]);
   const [events, setEvents] = useState([]);
@@ -76,6 +67,10 @@ const App = () => {
   const [db, setDb] = useState(null);
   const [auth, setAuth] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  
+  // New state for the simple login form
+  const [tempUserInfo, setTempUserInfo] = useState({ name: '', email: '', role: '' });
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   // App ID for Firestore
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -86,14 +81,14 @@ const App = () => {
   // --- Firebase Initialization and Auth ---
   useEffect(() => {
     const firebaseConfig = {
-       apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
-  authDomain: "aihuman-b71a8.firebaseapp.com",
-  databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
-  projectId: "aihuman-b71a8",
-  storageBucket: "aihuman-b71a8.firebasestorage.app",
-  messagingSenderId: "611379386902",
-  appId: "1:611379386902:web:858045aa231ddc67f17337",
-  measurementId: "G-95ZBMYKFKC"
+                apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
+                authDomain: "aihuman-b71a8.firebaseapp.com",
+                databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
+                projectId: "aihuman-b71a8",
+                storageBucket: "aihuman-b71a8.firebasestorage.app",
+                messagingSenderId: "611379386902",
+                appId: "1:611379386902:web:858045aa231ddc67f17337",
+                measurementId: "G-95ZBMYKFKC"       
     };
 
     const app = initializeApp(firebaseConfig);
@@ -110,24 +105,51 @@ const App = () => {
         if (userSnap.exists()) {
           const userData = userSnap.data();
           setUser({ isLoggedIn: true, role: userData.role, uid: authUser.uid });
-          setLocation(userData.location || null);
-          setIsNewUser(false);
-          setFavoriteProviders(userData.favoriteProviders || []);
-          setJobTemplates(userData.jobTemplates || []);
-          setSelectedCommunityArea(userData.units?.[0] || null);
         } else {
           setUser({ isLoggedIn: true, role: null, uid: authUser.uid });
-          setIsNewUser(true);
         }
       } else {
         setUser({ isLoggedIn: false, role: null, uid: null });
-        setIsNewUser(false);
+        setTempUserInfo({ name: '', email: '', role: '' });
       }
       setIsAuthReady(true);
     });
 
     return () => unsubscribe();
   }, []);
+  
+  // NEW: This useEffect is responsible for creating the user document in Firestore
+  // It triggers only when a user is logged in but has no role yet (newly signed in)
+  useEffect(() => {
+    const createUserProfile = async () => {
+      if (user.isLoggedIn && !user.role && auth.currentUser && db && !isCreatingUser) {
+        try {
+          setIsCreatingUser(true); // Prevent multiple calls
+          const uid = auth.currentUser.uid;
+          const userRef = doc(db, `/artifacts/${appId}/users`, uid);
+          await setDoc(userRef, {
+            role: tempUserInfo.role,
+            name: tempUserInfo.name,
+            email: tempUserInfo.email,
+            createdAt: new Date().toISOString(),
+            bio: '',
+            portfolio: [],
+            availability: 'Mon-Fri, 9am-5pm',
+            units: [],
+            serviceAreas: [],
+          });
+          setUser(prev => ({ ...prev, role: tempUserInfo.role }));
+          setModalContent({ title: "Login Successful", message: `Welcome, ${tempUserInfo.name}! You are now logged in as a ${tempUserInfo.role}.` });
+        } catch (error) {
+          console.error("Error creating user document:", error);
+          setModalContent({ title: "Database Error", message: `Failed to create user profile: ${error.message}. Please check Firestore rules.` });
+        } finally {
+          setIsCreatingUser(false);
+        }
+      }
+    };
+    createUserProfile();
+  }, [user.isLoggedIn, user.role, auth, db, isCreatingUser, tempUserInfo, appId]);
 
   // --- Real-time Data Fetching ---
   useEffect(() => {
@@ -251,11 +273,14 @@ const App = () => {
   };
 
   // --- Login/Logout Functions ---
-   const handleLogin = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     const name = e.target.name.value;
     const email = e.target.email.value;
     const role = e.target.role.value;
+    
+    // Store the temporary info for use in the useEffect hook
+    setTempUserInfo({ name, email, role });
     
     try {
       if (!auth) {
@@ -263,23 +288,8 @@ const App = () => {
         return;
       }
       
-      // Correctly sign in anonymously using the client SDK
-      const userCredential = await signInAnonymously(auth);
-      const uid = userCredential.user.uid;
-
-      const userRef = doc(db, `/artifacts/${appId}/users`, uid);
-      await setDoc(userRef, {
-        role: role,
-        name: name,
-        email: email,
-        createdAt: new Date().toISOString(),
-        bio: '',
-        portfolio: [],
-        availability: 'Mon-Fri, 9am-5pm',
-        units: [],
-        serviceAreas: [],
-      });
-      setModalContent({ title: "Login Successful", message: `Welcome, ${name}! You are now logged in as a ${role}.` });
+      // Sign in anonymously. The useEffect hook will handle creating the document
+      await signInAnonymously(auth);
     } catch (error) {
       console.error("Error with simple login:", error);
       setModalContent({ title: "Login Error", message: `An error occurred: ${error.message}` });
@@ -287,11 +297,11 @@ const App = () => {
   };
 
   const handleLogout = async () => {
-    await auth.signOut();
-    setUser({ isLoggedIn: false, role: null, uid: null });
-    setLocation(null);
+    if (auth) {
+      await auth.signOut();
+    }
   };
-
+  
   // --- AI Tagging Logic ---
   const handleAITagging = async () => {
     if (!jobDescription.trim()) return;
@@ -884,8 +894,8 @@ const App = () => {
           <option value="serviceProvider">I am a Service Provider</option>
           <option value="admin">I am an Admin</option>
         </select>
-        <button type="submit" className="py-3 px-6 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-colors">
-          Start Using the App
+        <button type="submit" disabled={isCreatingUser} className={`py-3 px-6 text-white font-semibold rounded-lg shadow-md transition-colors ${isCreatingUser ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}>
+          {isCreatingUser ? 'Logging In...' : 'Start Using the App'}
         </button>
       </form>
     </div>
@@ -1488,7 +1498,6 @@ const App = () => {
     );
 
   const renderContent = () => {
-    // Check if auth state has been determined yet. If not, show a loading screen.
     if (!isAuthReady) {
       return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans text-xl text-gray-700">
@@ -1497,7 +1506,6 @@ const App = () => {
       );
     }
     
-    // Logic for new and existing users
     if (!user.isLoggedIn) {
       return <LoginScreen />;
     } else {
