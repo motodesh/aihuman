@@ -81,7 +81,7 @@ const App = () => {
   // --- Firebase Initialization and Auth ---
   useEffect(() => {
     const firebaseConfig = {
-                apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
+      apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
                 authDomain: "aihuman-b71a8.firebaseapp.com",
                 databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
                 projectId: "aihuman-b71a8",
@@ -89,7 +89,7 @@ const App = () => {
                 messagingSenderId: "611379386902",
                 appId: "1:611379386902:web:858045aa231ddc67f17337",
                 measurementId: "G-95ZBMYKFKC"       
-     
+
     };
 
     const app = initializeApp(firebaseConfig);
@@ -280,7 +280,6 @@ const App = () => {
     const email = e.target.email.value;
     const role = e.target.role.value;
     
-    // Store the temporary info for use in the useEffect hook
     setTempUserInfo({ name, email, role });
     
     try {
@@ -289,7 +288,6 @@ const App = () => {
         return;
       }
       
-      // Sign in anonymously. The useEffect hook will handle creating the document
       await signInAnonymously(auth);
     } catch (error) {
       console.error("Error with simple login:", error);
@@ -703,18 +701,24 @@ const App = () => {
   useEffect(() => {
     if (db && user.isLoggedIn) {
       const allChats = allJobs.filter(job => job.residentUid === user.uid || (job.acceptedQuoteId && allUsers.find(u => u.id === user.uid)?.role === 'serviceProvider')).map(job => {
-        const chatId = [job.residentUid, job.providerUid].sort().join('_');
+        const chatId = [job.residentUid, user.uid].sort().join('_');
         return chatId;
       });
-      setUnreadMessages(allChats.length); 
+      setUnreadMessages(allChats.length);
     }
   }, [db, user.isLoggedIn, allJobs, allUsers]);
 
-  const handleOpenChat = async (jobId) => {
+  const handleOpenChat = (job) => {
     setIsViewingChat(true);
-    const job = allJobs.find(j => j.id === jobId);
-    if (job) {
-      const chatPartnerUid = user.role === 'resident' ? allUsers.find(u => u.role === 'serviceProvider')?.id : job.residentUid;
+    let chatPartnerUid;
+    if (user.role === 'resident') {
+      const acceptedQuote = quotes.find(q => q.id === job.acceptedQuoteId);
+      chatPartnerUid = acceptedQuote?.providerUid;
+    } else {
+      chatPartnerUid = job.residentUid;
+    }
+
+    if (chatPartnerUid) {
       const chatPartnerName = allUsers.find(u => u.id === chatPartnerUid)?.name || 'User';
       setChatPartner({ uid: chatPartnerUid, name: chatPartnerName });
     }
