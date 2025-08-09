@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, where, deleteDoc } from 'firebase/firestore';
 
 // Lucide-react for icons
@@ -8,7 +7,7 @@ import { Wrench, Zap, Home, Droplet, Shirt, UserPlus, X, Briefcase, DollarSign, 
 
 // Main application component
 const App = () => {
-  // Main app state for authentication and user role
+  // Main app state for user role and unique ID
   const [user, setUser] = useState({ isLoggedIn: false, role: null, uid: null });
   
   // App-wide data and loading states
@@ -68,9 +67,9 @@ const App = () => {
   const [auth, setAuth] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   
-  // New state for the simple login form
-  const [tempUserInfo, setTempUserInfo] = useState({ name: '', email: '', role: '' });
-  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  // NEW: State for the simple login form
+  const [simpleLoginInfo, setSimpleLoginInfo] = useState({ name: '', email: '', role: '' });
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // App ID for Firestore
   const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -78,80 +77,26 @@ const App = () => {
   // Gemini API key from environment variables
   const geminiApiKey = process.env.REACT_APP_GEMINI_API_KEY;
 
-  // --- Firebase Initialization and Auth ---
+  // --- Firebase Initialization ---
   useEffect(() => {
     const firebaseConfig = {
-      apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
+       apiKey: "AIzaSyBgn6En99KEfSAJHathTYGeYYTfBBxhO7A",
                 authDomain: "aihuman-b71a8.firebaseapp.com",
                 databaseURL: "https://aihuman-b71a8-default-rtdb.firebaseio.com",
                 projectId: "aihuman-b71a8",
                 storageBucket: "aihuman-b71a8.firebasestorage.app",
                 messagingSenderId: "611379386902",
                 appId: "1:611379386902:web:858045aa231ddc67f17337",
-                measurementId: "G-95ZBMYKFKC"       
-
+                measurementId: "G-95ZBMYKFKC"  
     };
 
     const app = initializeApp(firebaseConfig);
-    const authInstance = getAuth(app);
     const dbInstance = getFirestore(app);
 
     setDb(dbInstance);
-    setAuth(authInstance);
-
-    const unsubscribe = onAuthStateChanged(authInstance, async (authUser) => {
-      if (authUser) {
-        const userRef = doc(dbInstance, `/artifacts/${appId}/users`, authUser.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          setUser({ isLoggedIn: true, role: userData.role, uid: authUser.uid });
-        } else {
-          setUser({ isLoggedIn: true, role: null, uid: authUser.uid });
-        }
-      } else {
-        setUser({ isLoggedIn: false, role: null, uid: null });
-        setTempUserInfo({ name: '', email: '', role: '' });
-      }
-      setIsAuthReady(true);
-    });
-
-    return () => unsubscribe();
+    setIsAuthReady(true);
   }, []);
   
-  // NEW: This useEffect is responsible for creating the user document in Firestore
-  // It triggers only when a user is logged in but has no role yet (newly signed in)
-  useEffect(() => {
-    const createUserProfile = async () => {
-      if (user.isLoggedIn && !user.role && auth.currentUser && db && !isCreatingUser) {
-        try {
-          setIsCreatingUser(true); // Prevent multiple calls
-          const uid = auth.currentUser.uid;
-          const userRef = doc(db, `/artifacts/${appId}/users`, uid);
-          await setDoc(userRef, {
-            role: tempUserInfo.role,
-            name: tempUserInfo.name,
-            email: tempUserInfo.email,
-            createdAt: new Date().toISOString(),
-            bio: '',
-            portfolio: [],
-            availability: 'Mon-Fri, 9am-5pm',
-            units: [],
-            serviceAreas: [],
-          });
-          setUser(prev => ({ ...prev, role: tempUserInfo.role }));
-          setModalContent({ title: "Login Successful", message: `Welcome, ${tempUserInfo.name}! You are now logged in as a ${tempUserInfo.role}.` });
-        } catch (error) {
-          console.error("Error creating user document:", error);
-          setModalContent({ title: "Database Error", message: `Failed to create user profile: ${error.message}. Please check Firestore rules.` });
-        } finally {
-          setIsCreatingUser(false);
-        }
-      }
-    };
-    createUserProfile();
-  }, [user.isLoggedIn, user.role, auth, db, isCreatingUser, tempUserInfo, appId]);
-
   // --- Real-time Data Fetching ---
   useEffect(() => {
     if (db && user.isLoggedIn) {
@@ -273,32 +218,49 @@ const App = () => {
     }
   };
 
-  // --- Login/Logout Functions ---
+  // --- Simple Login/Logout Functions ---
   const handleLogin = async (e) => {
     e.preventDefault();
+    setIsLoggingIn(true);
     const name = e.target.name.value;
     const email = e.target.email.value;
     const role = e.target.role.value;
     
-    setTempUserInfo({ name, email, role });
-    
     try {
-      if (!auth) {
+      if (!db) {
         setModalContent({ title: "Initialization Error", message: "Firebase is not initialized yet. Please wait a moment and try again." });
+        setIsLoggingIn(false);
         return;
       }
       
-      await signInAnonymously(auth);
+      // Generate a simple, unique ID since we're not using Firebase Auth
+      const uid = name.toLowerCase().replace(/\s/g, '') + '-' + Date.now();
+
+      const userRef = doc(db, `/artifacts/${appId}/users`, uid);
+      await setDoc(userRef, {
+        role: role,
+        name: name,
+        email: email,
+        createdAt: new Date().toISOString(),
+        bio: '',
+        portfolio: [],
+        availability: 'Mon-Fri, 9am-5pm',
+        units: [],
+        serviceAreas: [],
+      });
+      
+      setUser({ isLoggedIn: true, role: role, uid: uid });
+      setModalContent({ title: "Login Successful", message: `Welcome, ${name}! You are now logged in as a ${role}.` });
     } catch (error) {
       console.error("Error with simple login:", error);
       setModalContent({ title: "Login Error", message: `An error occurred: ${error.message}` });
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
-  const handleLogout = async () => {
-    if (auth) {
-      await auth.signOut();
-    }
+  const handleLogout = () => {
+    setUser({ isLoggedIn: false, role: null, uid: null });
   };
   
   // --- AI Tagging Logic ---
@@ -306,7 +268,7 @@ const App = () => {
     if (!jobDescription.trim()) return;
 
     if (!geminiApiKey) {
-      setModalContent({ title: "API Key Missing", message: "The Gemini API key is missing. Please add it as an environment variable in Vercel to use this feature." });
+      setModalContent({ title: "API Key Missing", message: "The Gemini API key is missing. Please add it as an environment variable to use this feature." });
       return;
     }
     
@@ -796,7 +758,7 @@ const App = () => {
 
   // --- Profile Component ---
   const ProfileView = ({ profileUser, onBack }) => {
-    const isCurrentUser = profileUser.id === user.uid;
+    const isCurrentUser = user.uid === profileUser.id;
     const isServiceProvider = profileUser.role === 'serviceProvider';
     const userReviews = reviews.filter(r => r.providerUid === profileUser.id);
     const avgRating = userReviews.length > 0 ? (userReviews.reduce((sum, r) => sum + r.rating, 0) / userReviews.length).toFixed(1) : 'N/A';
@@ -899,8 +861,8 @@ const App = () => {
           <option value="serviceProvider">I am a Service Provider</option>
           <option value="admin">I am an Admin</option>
         </select>
-        <button type="submit" disabled={isCreatingUser} className={`py-3 px-6 text-white font-semibold rounded-lg shadow-md transition-colors ${isCreatingUser ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}>
-          {isCreatingUser ? 'Logging In...' : 'Start Using the App'}
+        <button type="submit" disabled={isLoggingIn} className={`py-3 px-6 text-white font-semibold rounded-lg shadow-md transition-colors ${isLoggingIn ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}>
+          {isLoggingIn ? 'Logging In...' : 'Start Using the App'}
         </button>
       </form>
     </div>
@@ -908,12 +870,30 @@ const App = () => {
 
   // --- Universal Dashboard Component ---
   const Dashboard = () => {
+    const memoizedServiceCatalog = useMemo(() => {
+      if (!serviceCatalog || !residentSearchQuery) return serviceCatalog;
+      return serviceCatalog.filter(service =>
+        service.name.toLowerCase().includes(residentSearchQuery.toLowerCase())
+      );
+    }, [serviceCatalog, residentSearchQuery]);
+
+    const memoizedAvailableJobs = useMemo(() => {
+      if (!allJobs || !spSearchQuery) return allJobs;
+      const userAreas = allUsers.find(u => u.id === user.uid)?.serviceAreas || [];
+      return allJobs.filter(job =>
+        job.status === 'pending' &&
+        userAreas.some(area => job.unit.includes(area)) &&
+        (job.service.toLowerCase().includes(spSearchQuery.toLowerCase()) ||
+         job.description.toLowerCase().includes(spSearchQuery.toLowerCase()))
+      );
+    }, [allJobs, spSearchQuery, allUsers, user.uid]);
+
     // Renders the main dashboard content based on role
     let content;
     if (user.role === 'resident') {
-      content = renderResidentDashboard();
+      content = renderResidentDashboard(memoizedServiceCatalog);
     } else if (user.role === 'serviceProvider') {
-      content = renderServiceProviderDashboard();
+      content = renderServiceProviderDashboard(memoizedAvailableJobs);
     } else if (user.role === 'admin') {
       content = renderAdminDashboard();
     }
@@ -991,7 +971,7 @@ const App = () => {
     </div>
   );
 
-  const renderResidentDashboard = () => {
+  const renderResidentDashboard = (memoizedServiceCatalog) => {
     const myJobs = allJobs.filter(job => job.residentUid === user.uid);
     const residentUser = allUsers.find(u => u.id === user.uid);
     const myUnits = residentUser?.units || [];
@@ -1110,7 +1090,7 @@ const App = () => {
     );
   };
 
-  const renderServiceProviderDashboard = () => {
+  const renderServiceProviderDashboard = (memoizedAvailableJobs) => {
     const myQuotes = quotes.filter(q => q.providerUid === user.uid);
     const myAcceptedJobs = allJobs.filter(job => job.acceptedQuoteId && quotes.find(q => q.id === job.acceptedQuoteId)?.providerUid === user.uid);
 
